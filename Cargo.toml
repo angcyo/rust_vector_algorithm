@@ -1,0 +1,8 @@
+[package]
+name = "rust_vector_algorithm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# https://crates.io/crates/flate2
+flate2 = "1.1.11"
