@@ -21,35 +21,41 @@ rust_vector_algorithm::ai_to_svg_path(&bytes);
 ## 支持内容
 
 ### PLT (HPGL)
-- 指令：`IN` `DF` `PU` `PD` `PA` `PR`（绝对/相对坐标）、`AA` `AR`（圆弧）、`CI`（圆）、`PE`（压缩折线，base64/base32、小数位、绝对坐标 `=`、抬笔 `<`）
+- 指令：`IN` `DF` `PU` `PD` `PA` `PR`（绝对/相对坐标）、`AA` `AR`（圆弧）、`AT` `RT`（三点弧）、`BZ` `BR`（贝塞尔）、`CI`（圆）、`ER` `RR` `EA` `RA`（矩形轮廓）、`PE`（压缩折线，base64/base32、小数位、绝对坐标 `=`、抬笔 `<`）
 - 指令可用 `;`、换行或直接连写分隔
 - `scale` 参数用于单位缩放
+- 扩展名：`.plt` `.hpgl` `.hpg` `.hgl` `.prn`
 
-### DXF（仅 ASCII）
-- 仅读取 `ENTITIES` 段
-- 实体：`LINE`、`LWPOLYLINE`（含 bulge 圆弧、闭合）、`POLYLINE`/`VERTEX`（含 bulge、闭合）、`CIRCLE`、`ARC`、`ELLIPSE`（整椭圆与椭圆弧）、`SPLINE`（NURBS 求值后以折线近似；节点不合法时退化为拟合点/控制点连线）
+### DXF（ASCII 与二进制）
+- ASCII DXF 与二进制 DXF (R13+)
+- 读取 `ENTITIES` 与 `BLOCKS` 段
+- 实体：`LINE`、`LWPOLYLINE`（含 bulge、闭合）、`POLYLINE`/`VERTEX`（含 bulge、闭合）、`CIRCLE`、`ARC`、`ELLIPSE`、`SPLINE`（NURBS 求值后以折线近似；节点不合法时退化为拟合点/控制点连线）、`SOLID`/`TRACE`/`3DFACE`（轮廓）
+- `INSERT` 块引用：位置、缩放、旋转、阵列（行/列）、嵌套（最多 16 层）、块基点
+- 挤出方向 Z 为负时做 X 镜像
 
-### AI
-- 旧版 PostScript 风格：`m` `l` `c` `v` `y` `h` 及 `moveto` `lineto` `curveto` `closepath`
-- PDF 兼容 AI：提取内容流（未压缩或 FlateDecode），支持 `m` `l` `c` `v` `y` `h` `re`
+### AI / EPS / PDF
+- 旧版 PostScript 风格：`m` `l` `c` `v` `y` `h` 及 `moveto` `lineto` `curveto` `rmoveto` `rlineto` `rcurveto` `closepath`
+- PDF 兼容 AI 与 `.pdf`：提取内容流（未压缩，或 FlateDecode / ASCII85Decode / ASCIIHexDecode 及其组合），支持 `m` `l` `c` `v` `y` `h` `re`
+- 变换矩阵 `cm` 与 `q`/`Q` 图形状态栈
+- 扩展名：`.ai` `.eps` `.pdf` `.ps`
 
 ## 不支持内容
 
 ### PLT (HPGL)
-- HP-GL/2 的大部分指令：`SC` 缩放、`IP`/`IW`、`RO` 旋转、`AT`/`RT` 三点弧/贝塞尔、`ER`/`EA`/`RR`/`RA`/`EW` 矩形与扇形、多边形模式 `PM`/`FP`/`EP`、`LB` 文字、`SP`/`LT`/`PW` 笔号/线型/线宽（解析但忽略）
+- `SC` 缩放、`IP`/`IW`、`RO` 旋转、`EW`/`WG` 扇形、多边形模式 `PM`/`FP`/`EP` 的填充语义、`LB` 文字、`SP`/`LT`/`PW` 笔号/线型/线宽（解析但忽略）
 - 圆的弦角（`CI` 第二参数）被忽略
 - 二进制 PCL/RTL 内容
 
 ### DXF
-- 二进制 DXF
-- `BLOCKS` 段与 `INSERT` 块引用、`HATCH`、`TEXT`/`MTEXT`、`DIMENSION`、`POINT`、`3DFACE`、`SOLID`、`LEADER`、`IMAGE` 等其他实体
+- R12 二进制 DXF
+- `HATCH`、`TEXT`/`MTEXT`、`DIMENSION`、`POINT`、`LEADER`、`IMAGE`、`MLINE`、`ATTRIB` 等其他实体
 - 图层、颜色、线型、线宽、单位（`$INSUNITS`）
-- 非默认挤出方向（OCS 变换）、Z 坐标
-- 有理 `SPLINE` 以外的精确曲线输出（样条为折线近似）
+- 任意方向的挤出方向（仅处理 Z 为负的镜像）、Z 坐标
+- 样条为折线近似，不输出精确曲线
 
-### AI
-- 加密文件、PDF 对象流 (ObjStm) 以及 Flate 以外的滤镜（LZW、ASCII85 等）
-- 变换矩阵 `cm`、图形状态栈 `q`/`Q`，因此嵌套变换与坐标系不会被应用
+### AI / EPS / PDF
+- 加密文件、PDF 对象流 (ObjStm) 以及 LZW、RunLength 等其他滤镜
 - 颜色、填充/描边样式、渐变、裁剪路径、透明度、图案
-- 文字、位图、符号、图层、画板、多页
+- 文字、位图、符号、图层、画板、多页区分（所有页路径合并输出）
 - Illustrator 私有数据（`%%BeginPrivate`、PGF 等）
+- PostScript 的变量、过程、`gsave`/`grestore`/`translate`/`scale`/`rotate` 等通用语言特性

@@ -65,6 +65,60 @@ pub fn plt_to_svg_path(text: &str, scale: f64) -> String {
                     pb.arc_center(x * scale, y * scale, r * scale, 0.0, 360.0, true, false);
                 }
             }
+            "ER" | "RR" | "EA" | "RA" if args.len() >= 2 => {
+                let (dx, dy) = if cmd == "ER" || cmd == "EA" { (args[0] - x, args[1] - y) } else { (args[0], args[1]) };
+                let (x0, y0) = (x * scale, y * scale);
+                pb.move_to(x0, y0);
+                pb.line_to(x0 + dx * scale, y0);
+                pb.line_to(x0 + dx * scale, y0 + dy * scale);
+                pb.line_to(x0, y0 + dy * scale);
+                pb.close();
+                pb.move_to(x0, y0);
+            }
+            "AT" | "RT" if args.len() >= 4 => {
+                let (p1, p2) = if cmd == "RT" {
+                    ((x + args[0], y + args[1]), (x + args[0] + args[2], y + args[1] + args[3]))
+                } else {
+                    ((args[0], args[1]), (args[2], args[3]))
+                };
+                let (ax, ay) = (x, y);
+                let d = 2.0 * (ax * (p1.1 - p2.1) + p1.0 * (p2.1 - ay) + p2.0 * (ay - p1.1));
+                if d.abs() < 1e-12 {
+                    if pen_down {
+                        pb.line_to(p2.0 * scale, p2.1 * scale);
+                    } else {
+                        pb.move_to(p2.0 * scale, p2.1 * scale);
+                    }
+                } else {
+                    let s = |p: (f64, f64)| p.0 * p.0 + p.1 * p.1;
+                    let cx = (s((ax, ay)) * (p1.1 - p2.1) + s(p1) * (p2.1 - ay) + s(p2) * (ay - p1.1)) / d;
+                    let cy = (s((ax, ay)) * (p2.0 - p1.0) + s(p1) * (ax - p2.0) + s(p2) * (p1.0 - ax)) / d;
+                    let r = ((ax - cx).powi(2) + (ay - cy).powi(2)).sqrt();
+                    let ccw = (p1.0 - ax) * (p2.1 - p1.1) - (p1.1 - ay) * (p2.0 - p1.0) > 0.0;
+                    let a0 = (ay - cy).atan2(ax - cx).to_degrees();
+                    let a2 = (p2.1 - cy).atan2(p2.0 - cx).to_degrees();
+                    if pen_down {
+                        pb.arc_center(cx * scale, cy * scale, r * scale, a0, a2, ccw, true);
+                    } else {
+                        pb.move_to(p2.0 * scale, p2.1 * scale);
+                    }
+                }
+                x = p2.0;
+                y = p2.1;
+            }
+            "BZ" | "BR" => {
+                for c in args.chunks_exact(6) {
+                    let o = if cmd == "BR" { (x, y) } else { (0.0, 0.0) };
+                    let q: Vec<f64> = c.iter().enumerate().map(|(i, v)| (v + if i % 2 == 0 { o.0 } else { o.1 }) * scale).collect();
+                    if pen_down {
+                        pb.cubic_to(q[0], q[1], q[2], q[3], q[4], q[5]);
+                    } else {
+                        pb.move_to(q[4], q[5]);
+                    }
+                    x = q[4] / scale;
+                    y = q[5] / scale;
+                }
+            }
             "AA" | "AR" if args.len() >= 3 => {
                 let (cx, cy) = if cmd == "AR" { (x + args[0], y + args[1]) } else { (args[0], args[1]) };
                 let ang = args[2];

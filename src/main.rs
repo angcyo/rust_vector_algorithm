@@ -10,9 +10,9 @@ fn main() {
     let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
     let data = fs::read(path).expect("读取文件失败");
     let d = match ext.as_str() {
-        "plt" | "hpgl" => rust_vector_algorithm::plt_to_svg_path(&String::from_utf8_lossy(&data), 1.0 / 40.0),
-        "dxf" => rust_vector_algorithm::dxf_to_svg_path(&String::from_utf8_lossy(&data)),
-        "ai" | "eps" => rust_vector_algorithm::ai_to_svg_path(&data),
+        "plt" | "hpgl" | "hpg" | "hgl" | "prn" => rust_vector_algorithm::plt_to_svg_path(&String::from_utf8_lossy(&data), 1.0 / 40.0),
+        "dxf" => rust_vector_algorithm::dxf_bytes_to_svg_path(&data),
+        "ai" | "eps" | "pdf" | "ps" => rust_vector_algorithm::ai_to_svg_path(&data),
         _ => {
             eprintln!("不支持的格式: {ext}");
             process::exit(1);

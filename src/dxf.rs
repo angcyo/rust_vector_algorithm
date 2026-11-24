@@ -39,30 +39,134 @@ impl Ent {
     }
 }
 
-/// 解析 ASCII DXF 的 ENTITIES 段为 SVG path.
-/// 支持 LINE, LWPOLYLINE(含 bulge), POLYLINE/VERTEX, CIRCLE, ARC, ELLIPSE, SPLINE.
+/// 解析 DXF (ASCII 或二进制) 为 SVG path.
+pub fn dxf_bytes_to_svg_path(data: &[u8]) -> String {
+    if data.starts_with(b"AutoCAD Binary DXF") {
+        build(read_pairs_binary(data))
+    } else {
+        build(read_pairs(&String::from_utf8_lossy(data)))
+    }
+}
+
+/// 解析 ASCII DXF 为 SVG path.
+/// 支持 ENTITIES 与 BLOCKS(INSERT 含缩放/旋转/阵列/嵌套), LINE, LWPOLYLINE, POLYLINE, CIRCLE, ARC,
+/// ELLIPSE, SPLINE, SOLID/TRACE/3DFACE, 负挤出方向镜像.
 pub fn dxf_to_svg_path(text: &str) -> String {
-    let pairs = read_pairs(text);
+    build(read_pairs(text))
+}
+
+fn read_pairs_binary(d: &[u8]) -> Pairs {
+    let mut out = Vec::new();
+    let mut i = 22;
+    let cstr = |i: &mut usize| {
+        let s = *i;
+        while *i < d.len() && d[*i] != 0 {
+            *i += 1;
+        }
+        let r = String::from_utf8_lossy(&d[s..(*i).min(d.len())]).into_owned();
+        *i += 1;
+        r
+    };
+    while i + 2 <= d.len() {
+        let code = u16::from_le_bytes([d[i], d[i + 1]]) as i32;
+        i += 2;
+        let need = |n: usize, i: usize| i + n <= d.len();
+        let v = match code {
+            0..=9 | 100..=102 | 105 | 300..=369 | 390..=399 | 410..=419 | 430..=439 | 470..=481 | 999 | 1000..=1009 => cstr(&mut i),
+            10..=59 | 110..=149 | 210..=239 | 460..=469 | 1010..=1059 => {
+                if !need(8, i) {
+                    break;
+                }
+                let v = f64::from_le_bytes(d[i..i + 8].try_into().unwrap());
+                i += 8;
+                v.to_string()
+            }
+            90..=99 | 420..=429 | 440..=459 | 1071 => {
+                if !need(4, i) {
+                    break;
+                }
+                let v = i32::from_le_bytes(d[i..i + 4].try_into().unwrap());
+                i += 4;
+                v.to_string()
+            }
+            160..=169 => {
+                if !need(8, i) {
+                    break;
+                }
+                let v = i64::from_le_bytes(d[i..i + 8].try_into().unwrap());
+                i += 8;
+                v.to_string()
+            }
+            290..=299 => {
+                if !need(1, i) {
+                    break;
+                }
+                i += 1;
+                d[i - 1].to_string()
+            }
+            _ => {
+                if !need(2, i) {
+                    break;
+                }
+                let v = i16::from_le_bytes([d[i], d[i + 1]]);
+                i += 2;
+                v.to_string()
+            }
+        };
+        out.push((code, v));
+    }
+    out
+}
+
+struct Block {
+    base: (f64, f64),
+    ents: Vec<Ent>,
+}
+
+fn build(pairs: Pairs) -> String {
     let mut ents: Vec<Ent> = Vec::new();
-    let mut in_entities = false;
+    let mut blocks: std::collections::HashMap<String, Block> = Default::default();
+    let mut sec = String::new();
+    let mut cur_block: Option<String> = None;
     let mut cur: Option<Ent> = None;
+
+    let mut commit = |e: Ent, sec: &str, cur_block: &mut Option<String>, ents: &mut Vec<Ent>| match sec {
+        "ENTITIES" => ents.push(e),
+        "BLOCKS" => match e.kind.as_str() {
+            "BLOCK" => {
+                let name = e.sval.iter().find(|(c, _)| *c == 2).map(|x| x.1.clone()).unwrap_or_default();
+                blocks.insert(name.clone(), Block { base: (e.getd(10, 0.0), e.getd(20, 0.0)), ents: Vec::new() });
+                *cur_block = Some(name);
+            }
+            "ENDBLK" => *cur_block = None,
+            _ => {
+                if let Some(b) = cur_block.as_ref().and_then(|n| blocks.get_mut(n)) {
+                    b.ents.push(e);
+                }
+            }
+        },
+        _ => {}
+    };
+
     let mut i = 0;
     while i < pairs.len() {
         let (code, val) = &pairs[i];
         if *code == 0 {
             if let Some(e) = cur.take() {
-                ents.push(e);
+                commit(e, &sec, &mut cur_block, &mut ents);
             }
             match val.as_str() {
                 "SECTION" => {
                     if let Some((2, n)) = pairs.get(i + 1) {
-                        in_entities = n == "ENTITIES";
+                        sec = n.clone();
                         i += 1;
                     }
                 }
-                "ENDSEC" => in_entities = false,
+                "ENDSEC" => sec.clear(),
                 "EOF" => break,
-                k if in_entities => cur = Some(Ent { kind: k.to_string(), ..Default::default() }),
+                k if sec == "ENTITIES" || sec == "BLOCKS" => {
+                    cur = Some(Ent { kind: k.to_string(), ..Default::default() })
+                }
                 _ => {}
             }
         } else if let Some(e) = cur.as_mut() {
@@ -75,22 +179,62 @@ pub fn dxf_to_svg_path(text: &str) -> String {
         i += 1;
     }
     if let Some(e) = cur.take() {
-        ents.push(e);
+        commit(e, &sec, &mut cur_block, &mut ents);
     }
 
     let mut pb = PathBuilder::new(true);
+    draw(&mut pb, &ents, &blocks, 0);
+    pb.finish()
+}
+
+fn draw(pb: &mut PathBuilder, ents: &[Ent], blocks: &std::collections::HashMap<String, Block>, depth: u32) {
     let mut k = 0;
     while k < ents.len() {
         let e = &ents[k];
+        let mirror = e.getd(230, 1.0) < 0.0 && e.kind != "INSERT";
+        if mirror {
+            pb.push_matrix();
+            pb.concat([-1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
+        }
         match e.kind.as_str() {
+            "INSERT" if depth < 16 => {
+                if let Some(b) = e.sval.iter().find(|(c, _)| *c == 2).and_then(|(_, n)| blocks.get(n)) {
+                    let (sx, sy) = (e.getd(41, 1.0), e.getd(42, 1.0));
+                    let rot = e.getd(50, 0.0).to_radians();
+                    let (cols, rows) = (e.getd(70, 1.0).max(1.0) as usize, e.getd(71, 1.0).max(1.0) as usize);
+                    let (cs, rs) = (e.getd(44, 0.0), e.getd(45, 0.0));
+                    let (c, s) = (rot.cos(), rot.sin());
+                    let (a, bb, cc, d) = (sx * c, sx * s, -sy * s, sy * c);
+                    let mx = if e.getd(230, 1.0) < 0.0 { -1.0 } else { 1.0 };
+                    for r in 0..rows {
+                        for col in 0..cols {
+                            let (ox, oy) = (col as f64 * cs, r as f64 * rs);
+                            let px = e.getd(10, 0.0) + c * ox - s * oy;
+                            let py = e.getd(20, 0.0) + s * ox + c * oy;
+                            pb.push_matrix();
+                            pb.concat([mx, 0.0, 0.0, 1.0, 0.0, 0.0]);
+                            pb.concat([a, bb, cc, d, px - (a * b.base.0 + cc * b.base.1), py - (bb * b.base.0 + d * b.base.1)]);
+                            draw(pb, &b.ents, blocks, depth + 1);
+                            pb.pop_matrix();
+                        }
+                    }
+                }
+            }
+            "SOLID" | "TRACE" | "3DFACE" => {
+                let g = |c: i32| (e.getd(c, 0.0), e.getd(c + 10, 0.0));
+                let pts = if e.kind == "3DFACE" { [g(10), g(11), g(12), g(13)] } else { [g(10), g(11), g(13), g(12)] };
+                pb.move_to(pts[0].0, pts[0].1);
+                for p in &pts[1..] {
+                    pb.line_to(p.0, p.1);
+                }
+                pb.close();
+            }
             "LINE" => {
                 pb.move_to(e.getd(10, 0.0), e.getd(20, 0.0));
                 pb.line_to(e.getd(11, 0.0), e.getd(21, 0.0));
             }
             "LWPOLYLINE" => {
-                let xs = e.all(10);
-                let ys = e.all(20);
-                // bulge 与顶点按顺序对应: 重新扫描保持顺序
+                // bulge 与顶点按顺序对应
                 let mut pts: Vec<(f64, f64, f64)> = Vec::new();
                 for (c, v) in &e.p {
                     match c {
@@ -108,8 +252,7 @@ pub fn dxf_to_svg_path(text: &str) -> String {
                         _ => {}
                     }
                 }
-                let _ = (xs, ys);
-                poly(&mut pb, &pts, e.flags() & 1 == 1);
+                poly(pb, &pts, e.flags() & 1 == 1);
             }
             "POLYLINE" => {
                 let closed = e.flags() & 1 == 1;
@@ -117,11 +260,13 @@ pub fn dxf_to_svg_path(text: &str) -> String {
                 k += 1;
                 while k < ents.len() && ents[k].kind == "VERTEX" {
                     let v = &ents[k];
-                    pts.push((v.getd(10, 0.0), v.getd(20, 0.0), v.getd(42, 0.0)));
+                    // 跳过样条控制点/多面网格面记录以外的辅助顶点 (flag 16)
+                    if (v.flags() & 16) == 0 {
+                        pts.push((v.getd(10, 0.0), v.getd(20, 0.0), v.getd(42, 0.0)));
+                    }
                     k += 1;
                 }
-                poly(&mut pb, &pts, closed);
-                // k 指向 SEQEND 或其他; 交给外层 k+=1 跳过
+                poly(pb, &pts, closed);
             }
             "CIRCLE" => {
                 pb.arc_center(e.getd(10, 0.0), e.getd(20, 0.0), e.getd(40, 0.0), 0.0, 360.0, true, false);
@@ -137,14 +282,17 @@ pub fn dxf_to_svg_path(text: &str) -> String {
                     false,
                 );
             }
-            "ELLIPSE" => ellipse(&mut pb, e),
-            "SPLINE" => spline(&mut pb, e),
+            "ELLIPSE" => ellipse(pb, e),
+            "SPLINE" => spline(pb, e),
             _ => {}
+        }
+        if mirror {
+            pb.pop_matrix();
         }
         k += 1;
     }
-    pb.finish()
 }
+
 
 fn poly(pb: &mut PathBuilder, pts: &[(f64, f64, f64)], closed: bool) {
     if pts.is_empty() {
