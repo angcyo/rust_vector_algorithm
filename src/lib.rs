@@ -8,6 +8,11 @@ pub use dxf::dxf_to_svg_path;
 pub use dxf::dxf_bytes_to_svg_path;
 pub use plt::plt_to_svg_path;
 
+///
+/// @author <a href="mailto:angcyo@126.com">angcyo</a>
+/// @date 2026/11/25
+///
+
 #[cfg(test)]
 mod tests {
     use super::*;

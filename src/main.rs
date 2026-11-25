@@ -1,5 +1,10 @@
 ﻿use std::{env, fs, process};
 
+///
+/// @author <a href="mailto:angcyo@126.com">angcyo</a>
+/// @date 2026/11/25
+///
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
