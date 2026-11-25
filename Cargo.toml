@@ -2,6 +2,8 @@
 name = "rust_vector_algorithm"
 version = "0.1.0"
 edition = "2024"
+authors = ["angcyo"]
+homepage = "https://github.com/angcyo/rust_vector_algorithm"
 
 [dependencies]
 # https://crates.io/crates/flate2
