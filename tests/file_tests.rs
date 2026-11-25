@@ -1,4 +1,4 @@
-﻿//! 从文件读取并打印 SVG path。
+//! 从文件读取并打印 SVG path。
 //! 修改下面的路径常量，或设置环境变量 PLT_FILE / DXF_FILE / AI_FILE。
 //! 运行: cargo test --test file_tests -- --nocapture
 
@@ -6,6 +6,8 @@ use std::{env, fs};
 
 const PLT_PATH: &str = r"D:\output\inkscape_output_hpgl.hpgl";
 const DXF_PATH: &str = r"D:\output\inkscape_output_dxf.dxf";
+//const DWG_PATH: &str = r"D:\output\craft_output_dwg.dwg";
+const DWG_PATH: &str = r"D:\_E\projects\rust\rust_vector_algorithm\samples\Ellipse.dwg";
 const AI_PATH: &str = r"D:\output\craft_output_ai.ai";
 
 fn read(var: &str, default: &str) -> Option<Vec<u8>> {
@@ -46,6 +48,17 @@ fn dxf_file_to_svg_path() {
     if let Some(d) = read("DXF_FILE", DXF_PATH) {
         let svg = rust_vector_algorithm::dxf_bytes_to_svg_path(&d);
         println!("DXF => {svg}");
+    }
+}
+
+/// ```
+/// M2.3925 -1.5027 A11.8799 3.9929 137.443 0 0 19.8941 -17.572 A11.8799 3.9929 137.443 0 0 2.3925 -1.5027
+/// ```
+#[test]
+fn dwg_file_to_svg_path() {
+    if let Some(d) = read("DWG_PATH", DWG_PATH) {
+        let svg = rust_vector_algorithm::dwg_to_svg_path(&d);
+        println!("DWG => {svg}");
     }
 }
 

@@ -22,6 +22,7 @@ rust_vector_algorithm::ai_to_svg_path(&bytes);
 | PLT / HPGL | HP-GL/2 and HP RTL Reference Guide: https://www.hp.com/ctg/Manual/bpl13210.pdf （概览：https://en.wikipedia.org/wiki/HP-GL） |
 | DXF | Autodesk DXF Reference: https://help.autodesk.com/view/OARX/2024/ENU/?guid=GUID-235B22E0-A567-4CF6-92D3-38A2306D73F3 |
 | AI | Adobe 未公开完整的现代 AI 规范。现代 AI 内含 PDF 数据，参见 PDF 规范 (ISO 32000-1): https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf ；旧版 AI 基于 PostScript: https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf |
+| DWG | Open Design Specification for .dwg files: https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf |
 
 ## 支持内容
 
@@ -36,6 +37,10 @@ rust_vector_algorithm::ai_to_svg_path(&bytes);
 - 实体：`LINE`、`LWPOLYLINE`（含 bulge、闭合）、`POLYLINE`/`VERTEX`（含 bulge、闭合）、`CIRCLE`、`ARC`、`ELLIPSE`、`SPLINE`（NURBS 求值后以折线近似；节点不合法时退化为拟合点/控制点连线）、`SOLID`/`TRACE`/`3DFACE`（轮廓）
 - `INSERT` 块引用：位置、缩放、旋转、阵列（行/列）、嵌套（最多 16 层）、块基点
 - 挤出方向 Z 为负时做 X 镜像
+
+### DWG（仅 AC1015，即 AutoCAD R2000/2000i/2002）
+- 实体：`LINE` `CIRCLE` `ARC` `LWPOLYLINE` `ELLIPSE` `SPLINE` `SOLID`/`TRACE` `POLYLINE`(2D)+`VERTEX`；跳过图纸空间实体
+- 其他版本请先用 ODA File Converter 转为 DXF 或 R2000 DWG
 
 ### AI / EPS / PDF
 - 旧版 PostScript 风格：`m` `l` `c` `v` `y` `h` 及 `moveto` `lineto` `curveto` `rmoveto` `rlineto` `rcurveto` `closepath`
@@ -57,6 +62,11 @@ rust_vector_algorithm::ai_to_svg_path(&bytes);
 - 图层、颜色、线型、线宽、单位（`$INSUNITS`）
 - 任意方向的挤出方向（仅处理 Z 为负的镜像）、Z 坐标
 - 样条为折线近似，不输出精确曲线
+
+### DWG
+- 非 AC1015 版本（R13/R14 结构不同；R2004+ 有压缩与加密）
+- `INSERT`/块定义、`HATCH`、`TEXT`、`DIMENSION`、3D 实体、3D/网格 `POLYLINE`、图层/颜色、单位（按 mm 原样输出）
+- 仅在少量样本上验证，未知变体可能解析错误或输出为空
 
 ### AI / EPS / PDF
 - 加密文件、PDF 对象流 (ObjStm) 以及 LZW、RunLength 等其他滤镜

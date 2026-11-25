@@ -1,10 +1,12 @@
 ﻿pub mod ai;
+pub mod dwg;
 pub mod dxf;
 pub mod path;
 pub mod plt;
 
 pub use ai::ai_to_svg_path;
 pub use dxf::dxf_to_svg_path;
+pub use dwg::dwg_to_svg_path;
 pub use dxf::dxf_bytes_to_svg_path;
 pub use plt::plt_to_svg_path;
 

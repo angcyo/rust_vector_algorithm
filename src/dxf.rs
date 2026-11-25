@@ -18,10 +18,10 @@ fn f(v: &str) -> f64 {
 }
 
 #[derive(Default, Clone)]
-struct Ent {
-    kind: String,
-    p: Vec<(i32, f64)>, // 数值组码
-    sval: Vec<(i32, String)>,
+pub(crate) struct Ent {
+    pub(crate) kind: String,
+    pub(crate) p: Vec<(i32, f64)>, // 数值组码
+    pub(crate) sval: Vec<(i32, String)>,
 }
 
 impl Ent {
@@ -188,7 +188,7 @@ fn build(pairs: Pairs) -> String {
     pb.finish()
 }
 
-/// 读取 $INSUNITS (回退 $MEASUREMENT) 得到 -> mm 的系数; 无单位按 mm.
+/// 读取 $INSUNITS (回退 $MEASUREMENT) 得到 -> mm 的系数, 无单位按 mm.
 fn insunits_to_mm(pairs: &Pairs) -> f64 {
     let hdr = |name: &str| {
         pairs.iter().position(|(c, v)| *c == 9 && v == name).and_then(|i| match pairs.get(i + 1) {
@@ -297,7 +297,7 @@ fn draw(pb: &mut PathBuilder, ents: &[Ent], blocks: &std::collections::HashMap<S
                 k += 1;
                 while k < ents.len() && ents[k].kind == "VERTEX" {
                     let v = &ents[k];
-                    // 跳过样条控制点/多面网格面记录以外的辅助顶点 (flag 16)
+                    // 跳过样条控制点等辅助顶点 (flag 16)
                     if (v.flags() & 16) == 0 {
                         pts.push((v.getd(10, 0.0), v.getd(20, 0.0), v.getd(42, 0.0)));
                     }
@@ -331,7 +331,7 @@ fn draw(pb: &mut PathBuilder, ents: &[Ent], blocks: &std::collections::HashMap<S
 }
 
 
-fn poly(pb: &mut PathBuilder, pts: &[(f64, f64, f64)], closed: bool) {
+pub(crate) fn poly(pb: &mut PathBuilder, pts: &[(f64, f64, f64)], closed: bool) {
     if pts.is_empty() {
         return;
     }
@@ -354,7 +354,7 @@ fn poly(pb: &mut PathBuilder, pts: &[(f64, f64, f64)], closed: bool) {
     }
 }
 
-fn ellipse(pb: &mut PathBuilder, e: &Ent) {
+pub(crate) fn ellipse(pb: &mut PathBuilder, e: &Ent) {
     let (cx, cy) = (e.getd(10, 0.0), e.getd(20, 0.0));
     let (mx, my) = (e.getd(11, 1.0), e.getd(21, 0.0));
     let ratio = e.getd(40, 1.0);
@@ -382,7 +382,7 @@ fn ellipse(pb: &mut PathBuilder, e: &Ent) {
     }
 }
 
-fn spline(pb: &mut PathBuilder, e: &Ent) {
+pub(crate) fn spline(pb: &mut PathBuilder, e: &Ent) {
     let degree = e.getd(71, 3.0) as usize;
     let knots = e.all(40);
     let xs = e.all(10);
@@ -457,3 +457,4 @@ fn de_boor(p: usize, kn: &[f64], xs: &[f64], ys: &[f64], w: &[f64], t: f64) -> (
     let r = d[p];
     (r.0 / r.2, r.1 / r.2)
 }
+
