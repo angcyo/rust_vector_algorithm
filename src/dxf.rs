@@ -183,8 +183,45 @@ fn build(pairs: Pairs) -> String {
     }
 
     let mut pb = PathBuilder::new(true);
+    pb.set_unit(insunits_to_mm(&pairs));
     draw(&mut pb, &ents, &blocks, 0);
     pb.finish()
+}
+
+/// 读取 $INSUNITS (回退 $MEASUREMENT) 得到 -> mm 的系数; 无单位按 mm.
+fn insunits_to_mm(pairs: &Pairs) -> f64 {
+    let hdr = |name: &str| {
+        pairs.iter().position(|(c, v)| *c == 9 && v == name).and_then(|i| match pairs.get(i + 1) {
+            Some((70, v)) => v.parse::<i32>().ok(),
+            _ => None,
+        })
+    };
+    match hdr("$INSUNITS") {
+        Some(1) => 25.4,
+        Some(2) => 304.8,
+        Some(3) => 1_609_344.0,
+        Some(4) | Some(0) | None => {
+            if hdr("$INSUNITS").is_none() && hdr("$MEASUREMENT") == Some(0) {
+                25.4
+            } else {
+                1.0
+            }
+        }
+        Some(5) => 10.0,
+        Some(6) => 1000.0,
+        Some(7) => 1_000_000.0,
+        Some(8) => 25.4e-6,
+        Some(9) => 0.0254,
+        Some(10) => 914.4,
+        Some(11) => 1e-7,
+        Some(12) => 1e-6,
+        Some(13) => 0.001,
+        Some(14) => 100.0,
+        Some(15) => 10_000.0,
+        Some(16) => 100_000.0,
+        Some(17) => 1e12,
+        Some(_) => 1.0,
+    }
 }
 
 fn draw(pb: &mut PathBuilder, ents: &[Ent], blocks: &std::collections::HashMap<String, Block>, depth: u32) {

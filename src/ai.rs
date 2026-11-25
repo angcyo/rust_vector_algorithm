@@ -6,6 +6,7 @@ use std::io::Read;
 /// 支持: 旧版 PostScript/EPS 风格 AI (m l c v y h 等) 以及 PDF 兼容 AI (内容流, 支持 FlateDecode, 操作符 m l c v y h re).
 pub fn ai_to_svg_path(data: &[u8]) -> String {
     let mut pb = PathBuilder::new(true);
+    pb.set_unit(25.4 / 72.0); // pt -> mm
     let mut found = false;
 
     if data.starts_with(b"%PDF") || find(data, b"%PDF-").is_some() {

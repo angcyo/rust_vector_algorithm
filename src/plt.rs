@@ -1,8 +1,10 @@
 use crate::path::PathBuilder;
 
-/// 解析 HPGL (.plt) 为 SVG path. `scale` 为单位缩放 (HPGL 默认 40 单位 = 1mm, 传 1.0/40.0 得 mm).
-/// 支持: IN PU PD PA PR AA AR CI SP 以及 PE 压缩折线.
+/// 解析 HPGL (.plt) 为 SVG path, 输出单位 mm (HPGL 默认 40 单位 = 1mm).
+/// 支持 `IP`+`SC` 设置用户单位 (仅按 X 方向等比换算, 忽略偏移).
 pub fn plt_to_svg_path(text: &str, scale: f64) -> String {
+    let mut scale = scale;
+    let mut ip_w = 10000.0; // 未指定 IP 时 P1-P2 的 X 跨度 (绘图仪单位)
     let mut pb = PathBuilder::new(true);
     let (mut x, mut y) = (0.0f64, 0.0f64);
     let mut pen_down = false;
@@ -42,6 +44,11 @@ pub fn plt_to_svg_path(text: &str, scale: f64) -> String {
             "IN" | "DF" => {
                 pen_down = false;
                 relative = false;
+                scale = 1.0 / 40.0;
+            }
+            "IP" if args.len() >= 4 && (args[2] - args[0]).abs() > 0.0 => ip_w = args[2] - args[0],
+            "SC" if args.len() >= 4 && (args[1] - args[0]).abs() > 0.0 => {
+                scale = ip_w / (args[1] - args[0]).abs() / 40.0;
             }
             "PU" | "PD" => {
                 pen_down = cmd == "PD";

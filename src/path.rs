@@ -10,6 +10,7 @@ pub struct PathBuilder {
     open: bool,
     m: [f64; 6],
     stack: Vec<[f64; 6]>,
+    unit: f64,
 }
 
 const IDENT: [f64; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
@@ -30,7 +31,13 @@ impl PathBuilder {
             open: false,
             m: IDENT,
             stack: Vec::new(),
+            unit: 1.0,
         }
+    }
+
+    /// 输出单位换算系数 (源单位 -> mm), 在最终输出时统一乘上.
+    pub fn set_unit(&mut self, unit: f64) {
+        self.unit = unit;
     }
 
     fn tx(&self, x: f64, y: f64) -> (f64, f64) {
@@ -40,6 +47,7 @@ impl PathBuilder {
 
     fn p(&self, x: f64, y: f64) -> String {
         let (x, y) = self.tx(x, y);
+        let (x, y) = (x * self.unit, y * self.unit);
         format!("{} {}", num(x), num(if self.flip_y { -y } else { y }))
     }
 
@@ -169,8 +177,8 @@ impl PathBuilder {
         let _ = write!(
             self.d,
             " A{} {} {} {} {} {}",
-            num(rx),
-            num(ry),
+            num(rx * self.unit),
+            num(ry * self.unit),
             num(rot),
             large as u8,
             sweep as u8,
